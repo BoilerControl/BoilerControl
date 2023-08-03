@@ -1,0 +1,53 @@
+module BoilerControl(
+    input clk,          // 时钟信号
+    input [5:0] mills,  // 6个磨煤机的状态，0表示手动，1表示自动
+    input [5:0] fans    // 6个一次风门的状态，0表示手动，1表示自动
+);
+    
+    // 磨煤机是否运行
+    wire [5:0] mill_running;
+    assign mill_running = mills; // 根据实际运行状态获取磨煤机运行信号
+    
+    // 判断运行的磨煤机中，一次风门是否在自动状态
+    wire any_mill_auto_fan;
+    assign any_mill_auto_fan = |(mill_running & fans); // 使用位或(|)运算符判断是否有任意磨煤机在自动状态下
+    
+    // 判断2台磨煤机一次风机是否在自动状态
+    wire [1:0] auto_mill_count;
+    assign auto_mill_count = {mill_running[5], mill_running[4]}; // 获取最高的两位磨煤机状态
+    wire two_auto_fans = &auto_mill_count; // 使用位与(&)运算符判断是否有2台磨煤机在自动状态下
+    
+    // 进入M/A站
+    wire enter_M_A_station;
+    assign enter_M_A_station = any_mill_auto_fan; // 若有磨煤机在自动状态，进入M/A站
+    
+    // 系统判断锅炉各运行磨煤机热风门的开度需求，并根据运行磨对一次风量的实际需求通过PID1进行适当的调整
+    wire [5:0] hot_air_demand;
+    // 这里需要根据实际需求和PID1控制算法来获取热风门的开度需求信号
+    
+    // 输出值需要进入限幅逻辑
+    wire [5:0] hot_air_demand_limited;
+    assign hot_air_demand_limited = hot_air_demand > 0.5 ? 0.5 :
+                                    hot_air_demand < -2.0 ? -2.0 :
+                                    hot_air_demand; // 限制一次风压修正值的范围
+    
+    // 原一次风炉压设定值由6台磨煤机的最大给煤率经函数发生器生成
+    wire [5:0] boiler_pressure_setpoint;
+    // 这里需要根据函数发生器生成一次风炉压设定值
+    
+    // 一次风压修正值与原一次风炉压设定值相加，得到一新的一次风压设定值
+    wire [5:0] new_boiler_pressure_setpoint;
+    assign new_boiler_pressure_setpoint = boiler_pressure_setpoint + hot_air_demand_limited;
+    
+    // 限制一次风压输出值（如10.0kPa~6.5kPa），由原逻辑PID2控制2台一次风机
+    wire [5:0] fan_pressure_output;
+    assign fan_pressure_output = new_boiler_pressure_setpoint > 10.0 ? 10.0 :
+                                 new_boiler_pressure_setpoint < 6.5 ? 6.5 :
+                                 new_boiler_pressure_setpoint; // 限制一次风压输出值的范围
+    
+    // 调用PID2控制函数控制2台一次风机
+    wire [1:0] fan_control;
+    assign fan_control = two_auto_fans ? fan_pressure_output[5:4] : 2'b00;
+    // 这里根据fan_control信号，控制对应两台一次风机
+    
+endmodule
